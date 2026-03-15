@@ -1,0 +1,16 @@
+[package]
+name = "metalps-gpu-load"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "metalps-gpu-load"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true }
+thiserror = { workspace = true }
+metal = { workspace = true }

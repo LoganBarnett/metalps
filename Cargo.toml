@@ -1,0 +1,49 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/cli",
+  "crates/lib",
+  "crates/gpu-load",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Logan Mzz <logan@example.com>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/loganmzz/metalps"
+
+[workspace.dependencies]
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt"] }
+
+# Utilities
+# tap - Enables method chaining and reduces superfluous local variables
+# that only exist to name intermediate results. Prefer .tap() over temporary
+# variables when it improves readability.
+tap = "1.0"
+
+# CLI parsing
+clap = { version = "4.5", features = ["derive", "env"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Error handling
+thiserror = "2.0"
+
+# macOS system interfaces (only used on macOS)
+libc = "0.2"
+
+# Core Foundation (for IOKit interaction)
+core-foundation = "0.9"
+core-foundation-sys = "0.8"
+
+# Metal GPU compute (for gpu-load)
+metal = "0.31"
+
+# Shared library
+metalps-lib = { path = "crates/lib" }

@@ -1,0 +1,20 @@
+[package]
+name = "metalps-lib"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tap = { workspace = true }
+libc = { workspace = true }
+core-foundation = { workspace = true }
+core-foundation-sys = { workspace = true }
+
+[dev-dependencies]
+cargo-husky = { version = "1", default-features = false, features = ["user-hooks"] }
