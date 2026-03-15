@@ -1,9 +1,17 @@
-//! Device-level GPU stats via IOKit IOAccelerator registry entries.
+//! GPU stats via IOKit IOAccelerator registry entries.
 //!
-//! Queries `IOAccelerator` services (which includes `AGXAccelerator` on Apple
-//! Silicon) and reads the `PerformanceStatistics` property dictionary.
+//! Two queries are provided:
 //!
-//! Known keys (vary by GPU family):
+//! 1. `query_client_gpu_times()` — per-process cumulative GPU time by
+//!    iterating `AGXDeviceUserClient` children of each accelerator.  Each
+//!    client carries an `AppUsage` array whose `accumulatedGPUTime` fields
+//!    (nanoseconds) sum to the total GPU execution time for that process.
+//!    This is the source Activity Monitor uses on Apple Silicon.
+//!
+//! 2. `query_devices()` — device-level GPU% and VRAM from the
+//!    `PerformanceStatistics` dictionary on the accelerator itself.
+//!
+//! Known PerformanceStatistics keys (vary by GPU family):
 //!   Apple Silicon (AGXAccelerator):
 //!     "Device Utilization %"    — float, overall GPU %
 //!     "In use system memory"    — int, bytes used by Metal clients
@@ -17,6 +25,7 @@
 
 use crate::types::DeviceGpuInfo;
 use core_foundation_sys::{
+  array::{CFArrayGetCount, CFArrayGetValueAtIndex, CFArrayRef},
   base::{CFRelease, CFTypeRef},
   dictionary::{CFDictionaryGetValue, CFDictionaryRef},
   number::{
@@ -27,6 +36,7 @@ use core_foundation_sys::{
     CFStringGetLength, CFStringGetMaximumSizeForEncoding, CFStringRef,
   },
 };
+use std::collections::HashMap;
 use std::ffi::{c_char, c_void, CStr, CString};
 
 // ── IOKit FFI ─────────────────────────────────────────────────────────────────
@@ -54,6 +64,12 @@ extern "C" {
     options: u32,
   ) -> KernReturn;
 
+  fn IORegistryEntryGetChildIterator(
+    entry: IOObject,
+    plane: *const c_char,
+    iterator: *mut IoIterator,
+  ) -> KernReturn;
+
   fn IORegistryEntryGetName(entry: IOObject, name: *mut c_char) -> KernReturn;
 
   fn IOObjectRelease(object: IOObject) -> KernReturn;
@@ -64,6 +80,136 @@ const IO_OBJECT_NULL: IOObject = 0;
 const K_IO_MASTER_PORT_DEFAULT: u32 = 0;
 
 // ── Public API ────────────────────────────────────────────────────────────────
+
+/// Per-process cumulative GPU time from the IOKit client registry.
+pub struct ClientGpuSample {
+  pub pid: i32,
+  /// Sum of `accumulatedGPUTime` across all command queues and all client
+  /// connections for this PID, in nanoseconds (cumulative since process start).
+  pub accumulated_gpu_time_ns: u64,
+}
+
+/// Query `AGXDeviceUserClient` children of every `IOAccelerator` to collect
+/// per-process cumulative GPU execution time.
+///
+/// Returns one entry per PID that has an active GPU client connection.
+/// Never fails — returns an empty vec if IOKit is unavailable.
+pub fn query_client_gpu_times() -> Vec<ClientGpuSample> {
+  unsafe { query_client_gpu_times_inner() }
+}
+
+unsafe fn query_client_gpu_times_inner() -> Vec<ClientGpuSample> {
+  let service_name = CStr::from_bytes_with_nul(b"IOAccelerator\0").unwrap();
+  let matching = IOServiceMatching(service_name.as_ptr());
+  if matching.is_null() {
+    return vec![];
+  }
+
+  let mut acc_iter: IoIterator = 0;
+  let kr = IOServiceGetMatchingServices(
+    K_IO_MASTER_PORT_DEFAULT,
+    matching,
+    &mut acc_iter,
+  );
+  if kr != 0 {
+    return vec![];
+  }
+
+  // Accumulate GPU time by PID; a process may have multiple client connections.
+  let mut pid_map: HashMap<i32, u64> = HashMap::new();
+
+  loop {
+    let accelerator = IOIteratorNext(acc_iter);
+    if accelerator == IO_OBJECT_NULL {
+      break;
+    }
+
+    let plane = CStr::from_bytes_with_nul(b"IOService\0").unwrap();
+    let mut child_iter: IoIterator = 0;
+    let kr2 = IORegistryEntryGetChildIterator(
+      accelerator,
+      plane.as_ptr(),
+      &mut child_iter,
+    );
+    if kr2 == 0 {
+      loop {
+        let child = IOIteratorNext(child_iter);
+        if child == IO_OBJECT_NULL {
+          break;
+        }
+        if let Some((pid, gpu_ns)) = extract_client_gpu_time(child) {
+          *pid_map.entry(pid).or_insert(0) += gpu_ns;
+        }
+        IOObjectRelease(child);
+      }
+      IOObjectRelease(child_iter);
+    }
+
+    IOObjectRelease(accelerator);
+  }
+  IOObjectRelease(acc_iter);
+
+  pid_map
+    .into_iter()
+    .map(|(pid, accumulated_gpu_time_ns)| ClientGpuSample {
+      pid,
+      accumulated_gpu_time_ns,
+    })
+    .collect()
+}
+
+/// Read `IOUserClientCreator` and `AppUsage` from a single child entry.
+/// Returns `None` if the entry is not a GPU user client.
+unsafe fn extract_client_gpu_time(service: IOObject) -> Option<(i32, u64)> {
+  let mut props_ptr: *mut c_void = std::ptr::null_mut();
+  let kr = IORegistryEntryCreateCFProperties(
+    service,
+    &mut props_ptr,
+    std::ptr::null(),
+    0,
+  );
+  if kr != 0 || props_ptr.is_null() {
+    return None;
+  }
+  let props = props_ptr as CFDictionaryRef;
+
+  // Read creator string before any early return so we always release props.
+  let creator = get_cf_string(props, "IOUserClientCreator");
+  let gpu_ns = sum_app_usage_gpu_time(props);
+  CFRelease(props as CFTypeRef);
+
+  let pid = creator.as_deref().and_then(parse_creator_pid)?;
+  Some((pid, gpu_ns))
+}
+
+/// Parse the PID from `IOUserClientCreator` = `"pid 427, WindowServer"`.
+fn parse_creator_pid(s: &str) -> Option<i32> {
+  s.strip_prefix("pid ")?
+    .split(',')
+    .next()?
+    .trim()
+    .parse()
+    .ok()
+}
+
+/// Sum `accumulatedGPUTime` (ns) across all entries in the `AppUsage` CFArray.
+unsafe fn sum_app_usage_gpu_time(dict: CFDictionaryRef) -> u64 {
+  let cf_key = make_cf_string("AppUsage");
+  let val = CFDictionaryGetValue(dict, cf_key as *const c_void) as CFArrayRef;
+  CFRelease(cf_key as CFTypeRef);
+  if val.is_null() {
+    return 0;
+  }
+
+  let mut total: u64 = 0;
+  for i in 0..CFArrayGetCount(val) {
+    let elem = CFArrayGetValueAtIndex(val, i) as CFDictionaryRef;
+    if !elem.is_null() {
+      total += get_cf_u64(elem, "accumulatedGPUTime").unwrap_or(0);
+    }
+  }
+  total
+}
 
 /// Query all `IOAccelerator` entries and return device-level GPU info.
 /// Never fails — returns an empty vec if IOKit is unavailable.

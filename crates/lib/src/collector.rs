@@ -38,7 +38,7 @@ pub fn collect_with_interval(
   let first_samples = if let Some(pid) = pid_filter {
     if !first_samples.iter().any(|s| s.pid == pid) {
       let mut s = first_samples;
-      s.push(macos::mach::sample_process_force(pid));
+      s.push(macos::seed_sample(pid));
       s
     } else {
       first_samples
@@ -55,7 +55,7 @@ pub fn collect_with_interval(
   let second_samples = if let Some(pid) = pid_filter {
     if !second_samples.iter().any(|s| s.pid == pid) {
       let mut s = second_samples;
-      s.push(macos::mach::sample_process_force(pid));
+      s.push(macos::seed_sample(pid));
       s
     } else {
       second_samples
