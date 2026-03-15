@@ -1,0 +1,91 @@
+#+title:     metalps
+#+author:    Logan Barnett
+#+email:     logustus@gmail.com
+#+date:      <2026-03-02 Mon>
+#+language:  en
+
+A macOS GPU process monitor — like ~ps~, but for the GPU.  Shows per-process
+GPU utilization, cumulative GPU time, and Metal memory footprint, plus
+device-level statistics.
+
+* Usage
+
+#+begin_src sh :results none :exports code
+# Human-readable table (default)
+metalps
+
+# JSON output for scripting
+metalps --json
+
+# Watch a specific process
+metalps --pid 1234
+
+# Adjust sample window (default 1000ms)
+metalps --interval-ms 500
+
+# Sort by VRAM instead of GPU%
+metalps --sort vram
+#+end_src
+
+* Features
+
+1. Per-process GPU utilization percentage and cumulative GPU execution time,
+   sourced from ~AGXDeviceUserClient~ IOKit entries — the same data source
+   Activity Monitor uses on Apple Silicon.
+2. Per-process Metal memory footprint (VRAM) via ~TASK_VM_INFO~
+   ~ledger_tag_graphics_footprint~.
+3. Device-level GPU utilization and unified memory usage from IOKit
+   ~PerformanceStatistics~.
+4. Human-readable table output and machine-readable ~--json~ output.
+5. Filter to a single process with ~--pid~; sort by ~gpu~, ~time~, ~vram~, or
+   ~pid~.
+6. Configurable via CLI flags, environment variables, and a TOML config file.
+
+* Architecture
+
+** Data sources
+
+GPU execution time and process discovery come from iterating
+~AGXDeviceUserClient~ children of each ~IOAccelerator~ registry entry.
+Each client carries an ~AppUsage~ array; summing ~accumulatedGPUTime~ across
+all entries for a PID gives its total GPU execution time since process start.
+Two samples separated by ~--interval-ms~ yield a GPU utilization percentage.
+
+Metal memory footprint comes from ~task_info(TASK_VM_INFO)~ via
+~task_for_pid~.  This requires the calling process and target to share a
+user ID; processes owned by other users show no VRAM.
+
+** Workspace crates
+
+| Crate              | Binary              | Purpose                              |
+|--------------------+---------------------+--------------------------------------|
+| ~metalps-lib~      | —                   | Collection, formatting, types        |
+| ~metalps-cli~      | ~metalps~           | CLI front-end                        |
+| ~metalps-gpu-load~ | ~metalps-gpu-load~  | Metal compute load generator (tests) |
+
+** Staged configuration
+
+Configuration flows through explicit typed stages:
+
+1. ~CliRaw~ — raw command-line arguments (all ~Option~).
+2. ~ConfigFileRaw~ — raw TOML file contents (all ~Option~).
+3. Merge and validate into ~Config~ (no ~Option~ for required fields).
+
+* Development
+
+Requires Nix.  All ~cargo~ commands must run inside the Nix development shell
+so the correct Rust toolchain and ~rustfmt~ are in scope:
+
+#+begin_src sh :results none :exports code
+nix develop
+cargo build --workspace
+cargo test --workspace
+#+end_src
+
+Git commits also go through the shell — the pre-commit hook runs ~rustfmt~:
+
+#+begin_src sh :results none :exports code
+nix develop --command git commit -m "your message"
+#+end_src
+
+See [[file:llms.org][llms.org]] for coding guidelines.
