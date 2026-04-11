@@ -4,6 +4,8 @@
 #+date:      <2026-03-02 Mon>
 #+language:  en
 
+[[file:assets/metalps-icon.svg]]
+
 A macOS GPU process monitor — like ~ps~, but for the GPU.  Shows per-process
 GPU utilization, cumulative GPU time, and Metal memory footprint, plus
 device-level statistics.
@@ -26,6 +28,79 @@ metalps --interval-ms 500
 # Sort by VRAM instead of GPU%
 metalps --sort vram
 #+end_src
+
+* Example output
+
+The blocks below can be re-evaluated in Emacs (~C-c C-c~) to regenerate
+output after a fresh ~cargo build --workspace~.
+
+** Human-readable
+
+#+begin_src sh :exports both :results output
+./target/debug/metalps 2>/dev/null
+#+end_src
+
+#+RESULTS:
+#+begin_example
+metalps — GPU Process Monitor
+Sample interval: 1.0s
+
+PID     NAME                           GPU%    GPU TIME      VRAM
+------- --------------------------  -------  ----------  --------
+427     <427>                          2.2%      18h12m         -
+653     Terminal                       1.4%       15.0s         -
+1136    com.apple.WebKit.GPU           0.0%         1ms         -
+27601   Discord Helper (GPU)           0.0%      11m10s         -
+706     ControlCenter                  0.0%       1m33s         -
+684     Safari                         0.0%        5.1s         -
+
+Device: Apple M1 Pro | GPU: 3.0% | VRAM: 563.6M / -
+#+end_example
+
+** JSON
+
+#+begin_src sh :exports both :results output
+./target/debug/metalps --json 2>/dev/null
+#+end_src
+
+#+RESULTS:
+#+begin_example
+{
+  "timestamp_ms": 1773759633775,
+  "sample_interval_ms": 1000,
+  "processes": [
+    {
+      "pid": 427,
+      "name": "<427>",
+      "gpu_time_ns": 65520700969999,
+      "gpu_percent": 2.2,
+      "vram_bytes": null
+    },
+    {
+      "pid": 653,
+      "name": "Terminal",
+      "gpu_time_ns": 15067314458,
+      "gpu_percent": 1.4,
+      "vram_bytes": null
+    },
+    {
+      "pid": 27601,
+      "name": "Discord Helper (GPU)",
+      "gpu_time_ns": 670966936332,
+      "gpu_percent": 0.0,
+      "vram_bytes": null
+    }
+  ],
+  "devices": [
+    {
+      "name": "Apple M1 Pro",
+      "gpu_percent": 3.0,
+      "vram_total_bytes": null,
+      "vram_used_bytes": 564723712
+    }
+  ]
+}
+#+end_example
 
 * Features
 
