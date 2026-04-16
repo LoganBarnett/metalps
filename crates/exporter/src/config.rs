@@ -29,8 +29,17 @@ pub struct CliRaw {
   #[command(flatten)]
   pub common: CommonCli,
 
-  /// Address to listen on: host:port for TCP, /path/to.sock for Unix socket,
-  /// or sd-listen to inherit a socket from systemd.
+  /// IP address to bind to.  Ignored when --listen is set.
+  #[arg(long, env = "HOST")]
+  pub host: Option<String>,
+
+  /// TCP port to listen on.  Ignored when --listen is set.
+  #[arg(long, env = "PORT")]
+  pub port: Option<u16>,
+
+  /// Override host/port with a full listener address: host:port for TCP,
+  /// /path/to.sock for Unix socket, or sd-listen for systemd socket
+  /// activation.  When set, --host and --port are ignored.
   #[arg(long, env = "LISTEN")]
   pub listen: Option<String>,
 
@@ -44,6 +53,8 @@ pub struct ConfigFileRaw {
   #[serde(flatten)]
   pub common: CommonConfigFile,
 
+  pub host: Option<String>,
+  pub port: Option<u16>,
   pub listen: Option<String>,
   pub interval_ms: Option<u64>,
 }
@@ -71,10 +82,14 @@ impl Config {
     )
     .map_err(ConfigError::Validation)?;
 
-    let listen_str = cli
-      .listen
-      .or(config_file.listen)
-      .unwrap_or_else(|| "127.0.0.1:9101".to_string());
+    let listen_str = cli.listen.or(config_file.listen).unwrap_or_else(|| {
+      let host = cli
+        .host
+        .or(config_file.host)
+        .unwrap_or_else(|| "127.0.0.1".to_string());
+      let port = cli.port.or(config_file.port).unwrap_or(9101);
+      format!("{host}:{port}")
+    });
 
     let listen_address =
       listen_str.parse::<ListenerAddress>().map_err(|reason| {

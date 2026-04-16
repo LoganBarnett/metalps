@@ -56,4 +56,6 @@ tokio-listener = { version = "0.5", features = ["axum08"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["trace", "cors", "fs", "set-header"] }
 prometheus = "0.13"
+aide = { version = "0.15", features = ["axum", "axum-json", "axum-query", "scalar", "macros"] }
+schemars = "0.9"
 # WORKSPACE_DEPS

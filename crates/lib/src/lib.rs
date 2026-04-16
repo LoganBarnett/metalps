@@ -17,5 +17,5 @@ pub mod types;
 #[cfg(target_os = "macos")]
 mod macos;
 
-pub use logging::{LogFormat, LogLevel};
+pub use logging::{init_cli_logging, LogFormat, LogLevel};
 pub use types::{DeviceGpuInfo, GpuOutput, GpuProcessInfo, SortKey};

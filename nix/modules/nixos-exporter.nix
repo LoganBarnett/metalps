@@ -184,7 +184,7 @@ in {
           listenArg =
             if cfg.socket != null
             then "--listen sd-listen"
-            else "--listen ${cfg.host}:${toString cfg.port}";
+            else "--host ${cfg.host} --port ${toString cfg.port}";
           extraArgs = lib.concatStringsSep " " cfg.extraFlags;
         in
           "${cfg.package}/bin/metalps-exporter"

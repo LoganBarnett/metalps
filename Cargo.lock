@@ -685,18 +685,19 @@ dependencies = [
  "thiserror 2.0.18",
  "toml",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
 name = "metalps-exporter"
 version = "0.1.0"
 dependencies = [
+ "aide",
  "axum",
  "clap",
  "metalps-lib",
  "prometheus",
  "rust-template-foundation",
+ "schemars",
  "serde",
  "serde_json",
  "tap",
@@ -731,6 +732,7 @@ dependencies = [
  "tap",
  "thiserror 2.0.18",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

@@ -3,13 +3,14 @@
 //! Periodically samples GPU utilization and memory via metalps-lib and
 //! exposes the results at `/metrics` for Prometheus to scrape.
 
-use metalps_exporter::{config, gpu_metrics, web_base};
+use metalps_exporter::{config, gpu_metrics, logging, web_base};
 
 use axum::{serve, Router};
 use clap::Parser;
 use config::{CliRaw, Config, ConfigError};
 use gpu_metrics::GpuMetrics;
-use rust_template_foundation::logging::init_server_logging;
+use logging::init_server_logging;
+use prometheus::IntCounter;
 use rust_template_foundation::server::health::HealthRegistry;
 use rust_template_foundation::server::{shutdown, systemd};
 use std::sync::Arc;
@@ -55,9 +56,18 @@ async fn main() -> Result<(), ApplicationError> {
     Duration::from_millis(config.interval_ms),
   );
 
+  let registry = gpu_metrics.registry();
+  let request_counter =
+    IntCounter::new("http_requests_total", "Total HTTP requests received.")
+      .expect("Counter creation should not fail for valid opts.");
+  registry
+    .register(Box::new(request_counter.clone()))
+    .expect("Registration should not fail for a fresh counter name.");
+
   let state = AppState {
     health_registry: HealthRegistry::default(),
-    metrics_registry: gpu_metrics.registry(),
+    metrics_registry: registry,
+    request_counter,
   };
 
   let app: Router =

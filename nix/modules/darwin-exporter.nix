@@ -28,7 +28,7 @@
   listenArg =
     if cfg.socket != null
     then "--listen unix:${cfg.socket}"
-    else "--listen ${cfg.host}:${toString cfg.port}";
+    else "--host ${cfg.host} --port ${toString cfg.port}";
 
   execLine =
     "${cfg.package}/bin/metalps-exporter"

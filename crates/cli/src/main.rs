@@ -26,8 +26,8 @@ enum ApplicationError {
   #[error("Failed to collect GPU data: {0}")]
   Collect(#[from] collector::CollectorError),
 
-  #[error("Failed to write output: {0}")]
-  Output(#[from] std::io::Error),
+  #[error("Failed to render GPU report to stdout: {0}")]
+  ReportRender(#[source] std::io::Error),
 }
 
 fn main() -> Result<(), ApplicationError> {
@@ -53,9 +53,11 @@ fn run(config: Config) -> Result<(), ApplicationError> {
   let mut out = stdout.lock();
 
   if config.json_output {
-    output::render_json(&mut out, &data)?;
+    output::render_json(&mut out, &data)
+      .map_err(ApplicationError::ReportRender)?;
   } else {
-    output::render_human(&mut out, &data)?;
+    output::render_human(&mut out, &data)
+      .map_err(ApplicationError::ReportRender)?;
   }
 
   Ok(())
