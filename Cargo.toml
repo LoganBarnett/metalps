@@ -4,6 +4,8 @@ members = [
   "crates/cli",
   "crates/lib",
   "crates/gpu-load",
+    "crates/exporter",
+  # CRATE_MEMBERS
 ]
 
 [workspace.package]
@@ -47,3 +49,11 @@ metal = "0.31"
 
 # Shared library
 metalps-lib = { path = "crates/lib" }
+rust-template-foundation = { git = "ssh://git@gitea.proton:2222/logan/rust-template.git" }
+axum = "0.8"
+tokio = { version = "1.41", features = ["full"] }
+tokio-listener = { version = "0.5", features = ["axum08"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "cors", "fs", "set-header"] }
+prometheus = "0.13"
+# WORKSPACE_DEPS

@@ -1,7 +1,7 @@
 {
   description = "metalps - macOS GPU process monitor (like ps, but for the GPU)";
   inputs = {
-    nixpkgs.url = github:NixOS/nixpkgs/25.11;
+    nixpkgs.url = "github:NixOS/nixpkgs/25.11";
     rust-overlay.url = "github:oxalica/rust-overlay";
     crane.url = "github:ipetkov/crane";
   };
@@ -46,6 +46,14 @@
       };
 
       # Note: The 'lib' crate is not included here as it doesn't produce a binary
+      # CRATE:exporter:begin
+      exporter = {
+        name = "metalps-exporter";
+        binary = "metalps-exporter";
+        description = "Prometheus exporter for macOS GPU metrics";
+      };
+      # CRATE:exporter:end
+      # CRATE_ENTRIES
     };
 
     # Development shell packages.
@@ -130,6 +138,19 @@
     #   pkgs.lib.mapAttrs' (key: crate:
     #     pkgs.lib.nameValuePair crate.name self.packages.${final.stdenv.hostPlatform.system}.${key}
     #   ) workspaceCrates;
+
+    # ============================================================================
+    # SERVICE MODULES
+    # ============================================================================
+    nixosModules = {
+      exporter = import ./nix/modules/nixos-exporter.nix {inherit self;};
+      default = self.nixosModules.exporter;
+    };
+
+    darwinModules = {
+      exporter = import ./nix/modules/darwin-exporter.nix {inherit self;};
+      default = self.darwinModules.exporter;
+    };
 
   };
 
